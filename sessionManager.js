@@ -1,12 +1,14 @@
 (function () {
-    var SessionManager = function (username, targetArea) {
+    var SessionManager = function (userid, username, targetArea) {
         return {
+            userid: userid,
             username: username,
             targetArea: targetArea,
 
             _filename: 'sessions.json',
             _filelocation: "https://mytatts.tattsgroup.com/f/1f9b2",
             _uploadlocation: "https://mytatts.tattsgroup.com/fu?&intelliUpload=Y&folder_id=100746",
+            _postMessageLocation: "https://mytatts.tattsgroup.com/api/users/{current_user_id}/wall.json",
             _template: `
                 <div class="clearfloat"></div>
                 <div class="feed-post-preview blog-post-attachments ms-post-attachment embeded-link-preview" id="custom_sessionContent_{id}">
@@ -42,12 +44,12 @@
             },
 
             _renderSession: function (session) {
-                var that = this;                
+                var that = this;
                 return that._template.split(new RegExp("{(.+?)\}", "g")).map(that._mapTemplate(session)).join('');
             },
 
             _upload: function (data) {
-                var that = this;                
+                var that = this;
                 var formData = new FormData();
                 formData.append('file', new File([new Blob([JSON.stringify(data)])], that._filename));
 
@@ -60,8 +62,35 @@
                 });
             },
 
+            _postMessage: function (message) {
+                var that = this;
+
+                var data = {
+                    ms_request: {
+                        feed: {
+                            attachments: [],
+                            body: 'hello',
+                            group_id: 1202,
+                            feed_type: 'group'
+                        }
+                    }
+                };
+
+                var url = that._postMessageLocation.split(new RegExp("{(.+?)\}", "g")).map(that._mapTemplate({ current_user_id: that.userid })).join('');
+
+                return jQuery.ajax(url, {
+                    method: "POST",
+                    data: data,
+                    dataType: 'json'
+                }).fail(function() {
+                    debugger;
+                }).done(function() {
+                    debugger;
+                });
+            },
+
             _showDialog: function (title, message) {
-                var that = this;                
+                var that = this;
                 SimpleDialog.reset();
                 SimpleDialog.show({
                     title: title,
@@ -82,8 +111,8 @@
                 });
             },
 
-            _loading: function() {
-                var that = this;                
+            _loading: function () {
+                var that = this;
                 that.targetArea.empty().append('<div><div class="tip-holder"><div class="t-editable blank-layout" data-tooltip-class="custom-tooltip" id="custom_content"><p>Loading...</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;/p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&bsp;/p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&bsp;/p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&bsp;/p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&bsp;/p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&bsp;/p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p><p><span class="blank-placeholder-text"></span></p></div>  </div></div>');
             },
 
@@ -125,21 +154,22 @@
                 var defer = jQuery.Deferred();
 
                 jQuery.ajax(that._filelocation, { dataType: "json" }).fail(defer.reject).done(function (data) {
-                    var sessionAvailable = false;
+                    var sessionAvailable = undefined;
                     jQuery.each(data.sessions, function (index, session) {
                         if (session.id === sessionId) {
                             var index = jQuery.inArray(that.username, session.attendees);
                             if (index === -1) {
                                 session.attendees.push(that.username);
-                                sessionAvailable = true;
+                                sessionAvailable = session;
                             } else {
-                                that._showDialog("Error", "You've already signed up for this.");
+                                that._showDialog("Error", "You've already signed up for this. Try reloading the page.");
                             }
                             return; // exit loop
                         }
                     });
-                    if (sessionAvailable) {
+                    if (sessionAvailable != undefined) {
                         that._upload(data).fail(defer.reject).done(defer.resolve);
+                        //that._postMessage(that.username + " just signed up for " + sessionAvailable.name + "! Spots are filling up fast - get yours at " + document.location + "!");
                     }
                 });
 
@@ -147,7 +177,7 @@
             },
 
             LoadSessions: function () {
-                var that = this;                
+                var that = this;
                 that._loading();
 
                 return jQuery.ajax(that._filelocation, { dataType: "json" }).fail(that._failed).done(function (data) {
@@ -193,6 +223,6 @@
         };
     };
 
-    var sessionMgr = new SessionManager(current_user_name /* from mango apps globals */, jQuery('#intranet-template-container > * > .tip-holder').first());
+    var sessionMgr = new SessionManager(current_user_id, current_user_name /* from mango apps globals */, jQuery('#intranet-template-container > * > .tip-holder').first());
     sessionMgr.LoadSessions();
 })();
